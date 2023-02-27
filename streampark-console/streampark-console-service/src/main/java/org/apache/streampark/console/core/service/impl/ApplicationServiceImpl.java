@@ -27,7 +27,6 @@ import org.apache.streampark.common.fs.HdfsOperator;
 import org.apache.streampark.common.fs.LfsOperator;
 import org.apache.streampark.common.util.CompletableFutureUtils;
 import org.apache.streampark.common.util.DeflaterUtils;
-import org.apache.streampark.common.util.FlinkUtils;
 import org.apache.streampark.common.util.HadoopUtils;
 import org.apache.streampark.common.util.ThreadUtils;
 import org.apache.streampark.common.util.Utils;
@@ -55,8 +54,8 @@ import org.apache.streampark.console.core.enums.ChangedType;
 import org.apache.streampark.console.core.enums.CheckPointType;
 import org.apache.streampark.console.core.enums.ConfigFileType;
 import org.apache.streampark.console.core.enums.FlinkAppState;
-import org.apache.streampark.console.core.enums.LaunchState;
 import org.apache.streampark.console.core.enums.OptionState;
+import org.apache.streampark.console.core.enums.ReleaseState;
 import org.apache.streampark.console.core.mapper.ApplicationMapper;
 import org.apache.streampark.console.core.metrics.flink.JobsOverview;
 import org.apache.streampark.console.core.runner.EnvInitializer;
@@ -105,7 +104,6 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.flink.api.common.JobID;
-import org.apache.flink.configuration.CheckpointingOptions;
 import org.apache.flink.configuration.CoreOptions;
 import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.configuration.MemorySize;
@@ -354,9 +352,9 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
     LambdaUpdateWrapper<Application> updateWrapper = Wrappers.lambdaUpdate();
     updateWrapper.eq(Application::getId, application.getId());
     if (application.isFlinkSqlJob()) {
-      updateWrapper.set(Application::getLaunch, LaunchState.FAILED.get());
+      updateWrapper.set(Application::getRelease, ReleaseState.FAILED.get());
     } else {
-      updateWrapper.set(Application::getLaunch, LaunchState.NEED_LAUNCH.get());
+      updateWrapper.set(Application::getRelease, ReleaseState.NEED_RELEASE.get());
     }
     if (!application.isRunning()) {
       updateWrapper.set(Application::getState, FlinkAppState.REVOKED.getValue());
@@ -696,7 +694,7 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
     Utils.notNull(appParam.getTeamId(), "The teamId cannot be null");
     appParam.setUserId(commonService.getUserId());
     appParam.setState(FlinkAppState.ADDED.getValue());
-    appParam.setLaunch(LaunchState.NEED_LAUNCH.get());
+    appParam.setRelease(ReleaseState.NEED_RELEASE.get());
     appParam.setOptionState(OptionState.NONE.getValue());
     appParam.setCreateTime(new Date());
     appParam.setDefaultModeIngress(settingService.getIngressModeDefault());
@@ -775,7 +773,7 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
     newApp.setDefaultModeIngress(oldApp.getDefaultModeIngress());
     newApp.setUserId(commonService.getUserId());
     newApp.setState(FlinkAppState.ADDED.getValue());
-    newApp.setLaunch(LaunchState.NEED_LAUNCH.get());
+    newApp.setRelease(ReleaseState.NEED_RELEASE.get());
     newApp.setOptionState(OptionState.NONE.getValue());
     newApp.setCreateTime(new Date());
     newApp.setHotParams(oldApp.getHotParams());
@@ -818,7 +816,7 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
     try {
       checkQueueLabelIfNeed(appParam.getExecutionMode(), appParam.getYarnQueue());
       Application application = getById(appParam.getId());
-      application.setLaunch(LaunchState.NEED_LAUNCH.get());
+      application.setRelease(ReleaseState.NEED_RELEASE.get());
       if (application.isUploadJob()) {
         if (!ObjectUtils.safeEquals(application.getJar(), appParam.getJar())) {
           application.setBuild(true);
@@ -859,7 +857,7 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
       }
 
       appParam.setJobType(application.getJobType());
-      // changes to the following parameters need to be re-launched to take effect
+      // changes to the following parameters need to be re-release to take effect
       application.setJobName(appParam.getJobName());
       application.setVersionId(appParam.getVersionId());
       application.setArgs(appParam.getArgs());
@@ -983,7 +981,7 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
           // sql and dependency not changed, but version changed, means that rollback to the version
           CandidateType type = CandidateType.HISTORY;
           flinkSqlService.setCandidate(type, appParam.getId(), appParam.getSqlId());
-          application.setLaunch(LaunchState.NEED_ROLLBACK.get());
+          application.setRelease(ReleaseState.NEED_ROLLBACK.get());
           application.setBuild(true);
         }
       }
@@ -992,10 +990,10 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
   }
 
   @Override
-  public void updateLaunch(Application application) {
+  public void updateRelease(Application application) {
     LambdaUpdateWrapper<Application> updateWrapper = Wrappers.lambdaUpdate();
     updateWrapper.eq(Application::getId, application.getId());
-    updateWrapper.set(Application::getLaunch, application.getLaunch());
+    updateWrapper.set(Application::getRelease, application.getRelease());
     updateWrapper.set(Application::getBuild, application.getBuild());
     if (application.getOptionState() != null) {
       updateWrapper.set(Application::getOptionState, application.getOptionState());
@@ -1020,9 +1018,9 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
       LambdaUpdateWrapper<Application> updateWrapper = Wrappers.lambdaUpdate();
       updateWrapper.eq(Application::getId, application.getId());
       if (application.isRunning()) {
-        updateWrapper.set(Application::getLaunch, LaunchState.NEED_RESTART.get());
+        updateWrapper.set(Application::getRelease, ReleaseState.NEED_RESTART.get());
       } else {
-        updateWrapper.set(Application::getLaunch, LaunchState.DONE.get());
+        updateWrapper.set(Application::getRelease, ReleaseState.DONE.get());
         updateWrapper.set(Application::getOptionState, OptionState.NONE.getValue());
       }
       this.update(updateWrapper);
@@ -1072,8 +1070,8 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
 
   @Override
   public void clean(Application appParam) {
-    appParam.setLaunch(LaunchState.DONE.get());
-    this.updateLaunch(appParam);
+    appParam.setRelease(ReleaseState.DONE.get());
+    this.updateRelease(appParam);
   }
 
   @Override
@@ -1197,7 +1195,7 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
     if (appParam.getSavePointed()) {
       customSavepoint = appParam.getSavePoint();
       if (StringUtils.isBlank(customSavepoint)) {
-        customSavepoint = getSavePointPath(appParam);
+        customSavepoint = savePointService.getSavePointPath(appParam);
       }
     }
 
@@ -1246,6 +1244,7 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
             application.getK8sNamespace(),
             properties);
 
+    final Date triggerTime = new Date();
     CompletableFuture<CancelResponse> cancelFuture =
         CompletableFuture.supplyAsync(() -> FlinkClient.cancel(cancelRequest), executorService);
 
@@ -1260,13 +1259,12 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
                 String savePointDir = cancelResponse.savePointDir();
                 log.info("savePoint path: {}", savePointDir);
                 SavePoint savePoint = new SavePoint();
-                Date now = new Date();
                 savePoint.setPath(savePointDir);
                 savePoint.setAppId(application.getId());
                 savePoint.setLatest(true);
                 savePoint.setType(CheckPointType.SAVEPOINT.get());
-                savePoint.setTriggerTime(now);
-                savePoint.setCreateTime(now);
+                savePoint.setCreateTime(new Date());
+                savePoint.setTriggerTime(triggerTime);
                 savePointService.save(savePoint);
               }
               if (isKubernetesApp(application)) {
@@ -1319,7 +1317,7 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
   public String checkSavepointPath(Application appParam) throws Exception {
     String savepointPath = appParam.getSavePoint();
     if (StringUtils.isBlank(savepointPath)) {
-      savepointPath = getSavePointPath(appParam);
+      savepointPath = savePointService.getSavePointPath(appParam);
     }
 
     if (StringUtils.isNotBlank(savepointPath)) {
@@ -1579,7 +1577,7 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
               application.setStartTime(new Date());
               application.setEndTime(null);
               if (isKubernetesApp(application)) {
-                application.setLaunch(LaunchState.DONE.get());
+                application.setRelease(ReleaseState.DONE.get());
               }
               updateById(application);
 
@@ -1705,59 +1703,6 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
           && SINGLE_SPACE_PATTERN.matcher(jobName).matches();
     }
     return false;
-  }
-
-  private String getSavePointPath(Application appParam) throws Exception {
-    Application application = getById(appParam.getId());
-
-    // 1) properties have the highest priority, read the properties are set: -Dstate.savepoints.dir
-    String savepointPath =
-        FlinkClient.extractDynamicPropertiesAsJava(application.getDynamicProperties())
-            .get(CheckpointingOptions.SAVEPOINT_DIRECTORY.key());
-
-    // Application conf configuration has the second priority. If it is a streampark|flinksql type
-    // task,
-    // see if Application conf is configured when the task is defined, if checkpoints are configured
-    // and enabled,
-    // read `state.savepoints.dir`
-    if (StringUtils.isBlank(savepointPath)) {
-      if (application.isStreamParkJob() || application.isFlinkSqlJob()) {
-        ApplicationConfig applicationConfig = configService.getEffective(application.getId());
-        if (applicationConfig != null) {
-          Map<String, String> map = applicationConfig.readConfig();
-          if (FlinkUtils.isCheckpointEnabled(map)) {
-            savepointPath = map.get(CheckpointingOptions.SAVEPOINT_DIRECTORY.key());
-          }
-        }
-      }
-    }
-
-    // 3) If the savepoint is not obtained above, try to obtain the savepoint path according to the
-    // deployment type (remote|on yarn)
-    if (StringUtils.isBlank(savepointPath)) {
-      // 3.1) At the remote mode, request the flink webui interface to get the savepoint path
-      if (ExecutionMode.isRemoteMode(application.getExecutionMode())) {
-        FlinkCluster cluster = flinkClusterService.getById(application.getFlinkClusterId());
-        Utils.notNull(
-            cluster,
-            String.format(
-                "The clusterId=%s cannot be find, maybe the clusterId is wrong or "
-                    + "the cluster has been deleted. Please contact the Admin.",
-                application.getFlinkClusterId()));
-        Map<String, String> config = cluster.getFlinkConfig();
-        if (!config.isEmpty()) {
-          savepointPath = config.get(CheckpointingOptions.SAVEPOINT_DIRECTORY.key());
-        }
-      } else {
-        // 3.2) At the yarn or k8s mode, then read the savepoint in flink-conf.yml in the bound
-        // flink
-        FlinkEnv flinkEnv = flinkEnvService.getById(application.getVersionId());
-        savepointPath =
-            flinkEnv.convertFlinkYamlAsMap().get(CheckpointingOptions.SAVEPOINT_DIRECTORY.key());
-      }
-    }
-
-    return savepointPath;
   }
 
   private String getSavePointed(Application appParam) {

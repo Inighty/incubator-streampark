@@ -15,36 +15,17 @@
  * limitations under the License.
  */
 
-package org.apache.streampark.console.core.enums;
+-- ISSUE-2192 DDL & DML Start
 
-import lombok.Getter;
+alter table "public"."t_flink_savepoint" alter column "path" type varchar(1024) collate "pg_catalog"."default";
 
-import java.io.Serializable;
-import java.util.Arrays;
+insert into "public"."t_menu" values (100070, 100015, 'savepoint trigger', null, null, 'savepoint:trigger', null, '1', '1', null, now(), now());
 
-@Getter
-public enum OptionState implements Serializable {
+-- ISSUE-2192 DDL & DML End
 
-  /** Application which is currently action: none. */
-  NONE(0),
-  /** Application which is currently action: releasing. */
-  RELEASING(1),
-  /** Application which is currently action: cancelling. */
-  CANCELLING(2),
 
-  /** Application which is currently action: starting. */
-  STARTING(3),
+-- ISSUE-2366 DDL & DML Start
+alter table "public"."t_flink_app" rename "launch" to "release";
+update "public"."t_menu" set "menu_name"='release',"perms" = 'app:release' where "menu_id" = 100025;
+-- ISSUE-2366 DDL & DML End
 
-  /** Application which is currently action: savepointing. */
-  SAVEPOINTING(4);
-
-  private final int value;
-
-  OptionState(int value) {
-    this.value = value;
-  }
-
-  public static OptionState of(Integer state) {
-    return Arrays.stream(values()).filter((x) -> x.value == state).findFirst().orElse(null);
-  }
-}

@@ -15,36 +15,21 @@
  * limitations under the License.
  */
 
-package org.apache.streampark.console.core.enums;
+package org.apache.streampark.flink.client.bean
 
-import lombok.Getter;
+import java.util.{Map => JavaMap}
 
-import java.io.Serializable;
-import java.util.Arrays;
+import org.apache.streampark.common.conf.{FlinkVersion, K8sFlinkConfig}
+import org.apache.streampark.common.enums.ExecutionMode
 
-@Getter
-public enum OptionState implements Serializable {
+import javax.annotation.Nullable
 
-  /** Application which is currently action: none. */
-  NONE(0),
-  /** Application which is currently action: releasing. */
-  RELEASING(1),
-  /** Application which is currently action: cancelling. */
-  CANCELLING(2),
-
-  /** Application which is currently action: starting. */
-  STARTING(3),
-
-  /** Application which is currently action: savepointing. */
-  SAVEPOINTING(4);
-
-  private final int value;
-
-  OptionState(int value) {
-    this.value = value;
-  }
-
-  public static OptionState of(Integer state) {
-    return Arrays.stream(values()).filter((x) -> x.value == state).findFirst().orElse(null);
-  }
+/** Trigger savepoint request. */
+case class TriggerSavepointRequest(flinkVersion: FlinkVersion,
+  executionMode: ExecutionMode,
+  clusterId: String,
+  jobId: String,
+  savepointPath: String,
+  override val kubernetesNamespace: String = K8sFlinkConfig.DEFAULT_KUBERNETES_NAMESPACE,
+  @Nullable properties: JavaMap[String, Any]) extends SavepointRequestTrait {
 }

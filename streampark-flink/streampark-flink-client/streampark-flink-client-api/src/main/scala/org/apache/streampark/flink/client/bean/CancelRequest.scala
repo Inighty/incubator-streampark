@@ -28,8 +28,8 @@ case class CancelRequest(
     executionMode: ExecutionMode,
     clusterId: String,
     jobId: String,
-    withSavePoint: Boolean,
+    override val withSavepoint: Boolean,
     withDrain: Boolean,
-    customSavePointPath: String,
-    kubernetesNamespace: String = K8sFlinkConfig.DEFAULT_KUBERNETES_NAMESPACE,
-    @Nullable properties: JavaMap[String, Any])
+    savepointPath: String,
+    override val kubernetesNamespace: String = K8sFlinkConfig.DEFAULT_KUBERNETES_NAMESPACE,
+    @Nullable properties: JavaMap[String, Any]) extends SavepointRequestTrait {}
